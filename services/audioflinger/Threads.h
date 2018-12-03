@@ -1413,6 +1413,7 @@ public:
                     audio_input_flags_t *flags,
                     pid_t tid,
                     status_t *status /*non-NULL*/,
+                    bool canRecordUltraSound,
                     audio_port_handle_t portId);
 
             status_t    start(RecordTrack* recordTrack,

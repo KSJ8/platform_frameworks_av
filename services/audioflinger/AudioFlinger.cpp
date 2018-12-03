@@ -1628,6 +1628,7 @@ sp<media::IAudioRecord> AudioFlinger::createRecord(const CreateRecordInput& inpu
     status_t lStatus;
     audio_session_t sessionId = input.sessionId;
     audio_port_handle_t portId = AUDIO_PORT_HANDLE_NONE;
+    bool canRecordUltraSound;
 
     output.cblk.clear();
     output.buffers.clear();
@@ -1651,6 +1652,10 @@ sp<media::IAudioRecord> AudioFlinger::createRecord(const CreateRecordInput& inpu
                  __func__, callingUid, callingPid, clientPid);
         clientPid = callingPid;
     }
+
+    // check permission to record ultrasound
+    canRecordUltraSound = recordingUltraSoundAllowed();
+    ALOGE("TESTFILTER: ULTRASOUND permission: %s", canRecordUltraSound ? "granted" : "denied");
 
     // we don't yet support anything other than linear PCM
     if (!audio_is_valid_format(input.config.format) || !audio_is_linear_pcm(input.config.format)) {
@@ -1723,7 +1728,7 @@ sp<media::IAudioRecord> AudioFlinger::createRecord(const CreateRecordInput& inpu
                                                   &output.notificationFrameCount,
                                                   clientUid, &output.flags,
                                                   input.clientInfo.clientTid,
-                                                  &lStatus, portId);
+                                                  &lStatus, canRecordUltraSound, portId);
         LOG_ALWAYS_FATAL_IF((lStatus == NO_ERROR) && (recordTrack == 0));
 
         // lStatus == BAD_TYPE means FAST flag was rejected: request a new input from

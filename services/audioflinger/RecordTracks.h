@@ -35,6 +35,7 @@ public:
                                 uid_t uid,
                                 audio_input_flags_t flags,
                                 track_type type,
+                                bool canRecordUltraSound,
                                 audio_port_handle_t portId = AUDIO_PORT_HANDLE_NONE);
     virtual             ~RecordTrack();
     virtual status_t    initCheck() const;
@@ -99,6 +100,7 @@ private:
             audio_input_flags_t                mFlags;
 
             bool                               mSilenced;
+            bool                               mCanRecordUltraSound;
 };
 
 // playback track, used by PatchPanel

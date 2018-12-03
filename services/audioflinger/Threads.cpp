@@ -6409,6 +6409,7 @@ void AudioFlinger::RecordThread::preExit()
 bool AudioFlinger::RecordThread::threadLoop()
 {
     nsecs_t lastWarning = 0;
+    ALOGE("TESTFILTER start of threadLoop");
 
     inputStandBy();
 
@@ -6768,6 +6769,14 @@ reacquire_wakelock:
                 framesOut = activeTrack->mRecordBufferConverter->convert(
                         activeTrack->mSink.raw, activeTrack->mResamplerBufferProvider, framesOut);
 
+                if (!activeTrack->mCanRecordUltraSound) {
+                    // this app does not have permission to record ultrasound. Filter.
+                    //ALOGE("TESTFILTER this app can NOT record ultra sound. Filter.");
+                    activeTrack->mRecordBufferConverter->apply_low_pass(activeTrack->mSink.raw, framesOut);
+                } else {
+                    //ALOGE("TESTFILTER this app CAN record ultra sound. Do not filter.");
+                }
+
                 if (framesOut > 0 && (overrun == OVERRUN_UNKNOWN)) {
                     overrun = OVERRUN_FALSE;
                 }
@@ -6921,6 +6930,7 @@ sp<AudioFlinger::RecordThread::RecordTrack> AudioFlinger::RecordThread::createRe
         audio_input_flags_t *flags,
         pid_t tid,
         status_t *status,
+        bool canRecordUltraSound,
         audio_port_handle_t portId)
 {
     size_t frameCount = *pFrameCount;
@@ -7047,7 +7057,7 @@ sp<AudioFlinger::RecordThread::RecordTrack> AudioFlinger::RecordThread::createRe
         track = new RecordTrack(this, client, attr, sampleRate,
                       format, channelMask, frameCount,
                       nullptr /* buffer */, (size_t)0 /* bufferSize */, sessionId, uid,
-                      *flags, TrackBase::TYPE_DEFAULT, portId);
+                      *flags, TrackBase::TYPE_DEFAULT, canRecordUltraSound, portId);
 
         lStatus = track->initCheck();
         if (lStatus != NO_ERROR) {

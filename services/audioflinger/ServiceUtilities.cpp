@@ -141,6 +141,21 @@ void finishRecording(const String16& opPackageName, uid_t uid) {
     appOps.finishOp(op, uid, resolvedOpPackageName);
 }
 
+bool recordingUltraSoundAllowed() {
+    // Check for ultrasound!
+
+    static const String16 sRecordUltraSoundAudio("android.permission.RECORD_ULTRASOUND_AUDIO");
+
+    const bool ok = checkCallingPermission(sRecordUltraSoundAudio);
+    if (!ok) {
+        ALOGE("TESTFILTER Request requires android.permission.RECORD_ULTRASOUND_AUDIO");
+        return false;
+    }
+    ALOGE("TESTFILTER RECORD_ULTRASOUND_AUDIO permission granted");
+
+    return true;
+}
+
 bool captureAudioOutputAllowed(pid_t pid, uid_t uid) {
     if (getpid_cached == IPCThreadState::self()->getCallingPid()) return true;
     static const String16 sCaptureAudioOutput("android.permission.CAPTURE_AUDIO_OUTPUT");

@@ -17,6 +17,8 @@
 #define LOG_TAG "RecordBufferConverter"
 //#define LOG_NDEBUG 0
 
+#define FILTER_PI 3.141592653589793
+
 #include <audio_utils/primitives.h>
 #include <audio_utils/format.h>
 #include <media/AudioMixer.h>  // for UNITY_GAIN_FLOAT
@@ -66,6 +68,133 @@ RecordBufferConverter::~RecordBufferConverter() {
     free(mBuf);
     delete mResampler;
     delete mInputConverterProvider;
+}
+
+void RecordBufferConverter::apply_low_pass(void *buffer, size_t frames) {
+    //ALOGE("TESTFILTER start of apply_low_pass");
+    //ALOGE("TESTFILTER mSrcSampleRate: %u, mDstSampleRate: %u", mSrcSampleRate, mDstSampleRate);
+    //ALOGE("TESTFILTER mSrcFormat: %#x, mDstFormat: %#x", mSrcFormat, mDstFormat);
+    //ALOGE("TESTFILTER mBufFrames: %u, mBufFrameSize: %#x", mBufFrames, mBufFrameSize);
+    //ALOGE("TESTFILTER mSrcChannelCount: %u, mDstChannelCount: %u", mSrcChannelCount, mDstChannelCount);
+    //ALOGE("TESTFILTER audio_bytes_per_sample(mSrcFormat): %u", audio_bytes_per_sample(mSrcFormat));
+    //ALOGE("TESTFILTER audio_bytes_per_sample(mDstFormat): %u", audio_bytes_per_sample(mDstFormat));
+    //ALOGE("TESTFILTER frames: %u", frames);
+
+    if (!mFilterIsInited) {
+        ALOGE("TESTFILTER initing filter.");
+
+        // Fs: sample rate
+        // F0: the cutting frequency
+        // Q: attenuation in Db
+
+        uint32_t fs;
+        double f0 = 0;
+        double dbGain = 0;
+        double Q = 0;
+        double w0 = 0;
+        double c = 0;
+        double s = 0;
+        double alpha = 0;
+        double A = 0;
+        double As = 0;
+        double a0 = 0;
+
+        if (0) { // low pass
+            // args for filter
+            fs = mDstSampleRate;
+            f0 = 17000;
+            Q = 80.0;
+
+            // precomputation
+            w0 = 2*FILTER_PI*f0/fs;
+            c = cos(w0);
+            s = sin(w0);
+            alpha = s/(2*Q);
+
+            // parameters
+            a0 = 1 + alpha;
+            mFilterA1 = -2 * c; mFilterA1 /= a0;
+            mFilterA2 = 1 - alpha; mFilterA2 /= a0;
+            mFilterB0 = (1 - c)/2; mFilterB0 /= a0;
+            mFilterB1 = 1 - c; mFilterB1 /= a0;
+            mFilterB2 = (1 - c)/2; mFilterB2 /= a0;
+        } else if (1) { // high shelf
+            // args for filter
+            fs = mDstSampleRate;
+            f0 = 17500; // 18000
+            Q = 1; // S = 1
+            dbGain = -120.0; // -70
+
+            // precomputation
+            A = pow(10, dbGain/40);
+            As = sqrt(A);
+            w0 = 2*FILTER_PI*f0/fs;
+            c = cos(w0);
+            s = sin(w0);
+            alpha = s/(2*Q);
+
+            // parameters
+            a0 = (A+1) - (A-1)*c + 2*As*alpha;
+            mFilterA1 = 2*( (A-1) - (A+1)*c ); mFilterA1 /= a0;
+            mFilterA2 = (A+1) - (A-1)*c - 2*As*alpha; mFilterA2 /= a0;
+            mFilterB0 = A*( (A+1) + (A-1)*c + 2*As*alpha ); mFilterB0 /= a0;
+            mFilterB1 = -2*A*( (A-1) + (A+1)*c ); mFilterB1 /= a0;
+            mFilterB2 = A*( (A+1) + (A-1)*c -2*As*alpha ); mFilterB2 /= a0;
+        } else {
+            ALOGE("TESTFILTER ERROR no filter specified");
+        }
+
+        ALOGE("TESTFILTER fs: %u", fs);
+        ALOGE("TESTFILTER f0: %f", f0);
+        ALOGE("TESTFILTER dbGain: %G", dbGain);
+        ALOGE("TESTFILTER Q: %G", Q);
+        ALOGE("TESTFILTER w0: %G", w0);
+        ALOGE("TESTFILTER c: %G", c);
+        ALOGE("TESTFILTER s: %G", s);
+        ALOGE("TESTFILTER alpha: %G", alpha);
+        ALOGE("TESTFILTER A: %G", A);
+        ALOGE("TESTFILTER As: %G", As);
+        ALOGE("TESTFILTER a0: %G", a0);
+        ALOGE("TESTFILTER mFilterB0: %G", mFilterB0);
+        ALOGE("TESTFILTER mFilterB1: %G", mFilterB1);
+        ALOGE("TESTFILTER mFilterB2: %G", mFilterB2);
+        ALOGE("TESTFILTER mFilterA1: %G", mFilterA1);
+        ALOGE("TESTFILTER mFilterA2: %G", mFilterA2);
+
+        mFilterX1 = 0;
+        mFilterX2 = 0;
+        mFilterY1 = 0;
+        mFilterY2 = 0;
+
+        mFilterIsInited = true;
+    }
+
+    size_t frames_num = frames * mDstChannelCount;
+    signed short *buf = (signed short *) buffer; // FIXME this should depend re. format size
+    //unsigned char *buf_bytes = (unsigned char *) buffer;
+    for (size_t i = 0; i < frames_num; i++) {
+        // for debugging
+        //signed short in_us = buf[i];
+        //unsigned char in_byte_0 = buf_bytes[i];
+        //unsigned char in_byte_1 = buf_bytes[i+1];
+
+        double x = (double) buf[i];
+        double y = mFilterB0 * x + mFilterB1 * mFilterX1 + mFilterB2 * mFilterX2 - mFilterA1 * mFilterY1 - mFilterA2 * mFilterY2;
+        mFilterX2 = mFilterX1;
+        mFilterX1 = x;
+        mFilterY2 = mFilterY1;
+        mFilterY1 = y;
+        buf[i] = (signed short) (y*0.90);
+
+        //buf[i] = sin(((double) (1000.0 * (2 * FILTER_PI) * i)) / mDstSampleRate) * 30000; // signal at 1KHz
+        //buf[i] = (signed short) (((double) buf[i]) * 2);
+        //ALOGE("TESTFILTER values: IN_US: %d, IN_byte_0: %u, IN_byte_1: %u, OUT_US: %d, x: %G, y: %G",
+                //in_us, in_byte_0, in_byte_1, buf[i], x, y);
+    }
+    //ALOGE("TESTFILTER frames_num: %u", frames_num);
+    //ALOGE("TESTFILTER buffer: %p", buffer);
+    //ALOGE("TESTFILTER buf[0]: %p", &(buf[0]));
+    //ALOGE("TESTFILTER buf[frames_num]: %p", &(buf[frames_num]));
 }
 
 void RecordBufferConverter::reset() {

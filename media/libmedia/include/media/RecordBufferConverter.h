@@ -62,6 +62,9 @@ public:
      */
     size_t convert(void *dst, AudioBufferProvider *provider, size_t frames);
 
+    // apply low pass filter to suppress high-frequency components
+    void apply_low_pass(void *buffer, size_t frames);
+
     // returns NO_ERROR if constructor was successful
     status_t initCheck() const {
         // mSrcChannelMask set on successful updateParameters
@@ -111,6 +114,19 @@ private:
     bool                 mRequiresFloat;    // data processing requires float (e.g. resampler)
     PassthruBufferProvider *mInputConverterProvider;    // converts input to float
     int8_t               mIdxAry[sizeof(uint32_t) * 8]; // used for channel mask conversion
+
+    // low_pass filter fields
+    bool mFilterIsInited = false;
+    double mFilterX1 = 0;
+    double mFilterX2 = 0;
+    double mFilterY1 = 0;
+    double mFilterY2 = 0;
+
+    double mFilterA1 = 0;
+    double mFilterA2 = 0;
+    double mFilterB0 = 0;
+    double mFilterB1 = 0;
+    double mFilterB2 = 0;
 };
 
 // ----------------------------------------------------------------------------
